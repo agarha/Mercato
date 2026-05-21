@@ -136,7 +136,7 @@ Each persona has the format: name → goals → pains → success measures.
 
 ### EPIC-04 — `mercato-orders`: Multi-Vendor Order Lifecycle
 - **US-ORD-001** As a buyer, I add items from multiple vendors to one cart and check out once.
-  - **Given** cart has items from Vendor A and Vendor B, **when** I complete checkout, **then** one WC parent order and two `wp_mercato_orders` rows are created with correct totals and shipping per vendor.
+  - **Given** cart has items from Vendor A and Vendor B, **when** I complete checkout, **then** one WC parent order and two `wp_mercato_suborders` rows are created with correct totals and shipping per vendor.
 - **US-ORD-002** As a buyer, I see shipping costs per vendor at checkout (each vendor's shipping zone applies).
 - **US-ORD-003** As a vendor, I see only my sub-orders, never other vendors'.
 - **US-ORD-004** As a vendor, I update sub-order status (Processing → Packed → Shipped → Delivered) and attach a tracking number.
@@ -414,7 +414,7 @@ A traceability matrix is generated automatically by CI from this PRD's story IDs
 Sample row:
 | Story | REQ | Endpoint | Table | UI Screen | Test ID |
 |---|---|---|---|---|---|
-| US-ORD-001 | FR-ORD-001..003 | POST /mercato/v1/orders | `wp_mercato_orders` | UX-BUY-CART-01 | TC-E2E-031 |
+| US-ORD-001 | FR-ORD-001..003 | POST /mercato/v1/orders | `wp_mercato_suborders` | UX-BUY-CART-01 | TC-E2E-031 |
 | US-PAY-005 | FR-PAY-004 | GET /mercato/v1/payouts/export | `wp_mercato_payouts` | UX-FIN-PAYOUT-01 | TC-INT-094 |
 
 ---

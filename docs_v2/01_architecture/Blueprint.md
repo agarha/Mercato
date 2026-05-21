@@ -122,7 +122,7 @@ Every Mercato plugin extends `Mercato\Core\Plugin\ServiceProvider` and **must**:
      "provides_events": ["mercato.order.suborder.created.v1", "mercato.order.shipped.v1"],
      "consumes_events": ["mercato.product.deleted.v1"],
      "capabilities": ["mercato_orders_read_own", "mercato_orders_write_own", "mercato_orders_admin"],
-     "tables": ["wp_mercato_orders", "wp_mercato_order_items"],
+     "tables": ["wp_mercato_suborders", "wp_mercato_suborder_items"],
      "tier": "domain",
      "feature_flag": "mercato.orders"
    }
@@ -372,7 +372,7 @@ A complete AsyncAPI 2.6 spec is maintained at `docs_v2/07_openapi/AsyncAPI.yaml`
 | Product (catalog) | `wp_mercato_products` (MySQL) | OpenSearch `products-{tenant}` | Outbox → search-sync topic | <100ms search, <50ms PDP |
 | Product (cart) | `wp_wc_product_meta_lookup` (MySQL) — shadow | Same | Shadow synchronizer | <30ms |
 | Order parent | WC HPOS tables | MySQL primary | n/a | <100ms |
-| Order suborder | `wp_mercato_orders` (MySQL) | MySQL read replica (vendor dashboard) | Aurora read replica | <100ms |
+| Order suborder | `wp_mercato_suborders` (MySQL) | MySQL read replica (vendor dashboard) | Aurora read replica | <100ms |
 | Commission ledger | `wp_mercato_commissions` (MySQL, append-only) | MySQL read replica; nightly snapshot to S3 Parquet for analytics | Replica + ETL | <100ms / 24h |
 | Payout ledger | `wp_mercato_payouts` (MySQL, append-only) | MySQL read replica; Stripe API for live state | Replica | <100ms |
 | Message thread | `wp_mercato_messages` (MySQL) | MySQL primary; Redis cache for unread counts | Cache-aside | <50ms |

@@ -110,11 +110,11 @@ ANNOUNCED → READ-ONLY → DATA EXPORT → DELETION SCHEDULED → CERTIFIED DEL
 2. PII anonymization sweep:
    - `wp_users` tied to tenant → name/email replaced with `Anonymized-{user_id}@deleted.invalid`.
    - `wp_mercato_vendors` PII fields nulled or pseudonymized.
-   - `wp_mercato_orders.ship_to` redacted to country + city only.
+   - `wp_mercato_suborders.ship_to` redacted to country + city only.
    - `wp_mercato_messages` body replaced with `[anonymized]`.
    - KYC document filenames re-keyed (data already encrypted; key destruction scheduled).
 3. **Legal retention preserved:**
-   - `wp_mercato_commissions`, `wp_mercato_payouts`, `wp_mercato_orders` retained per BR-FIN-013 (US 1099 = 7y); pseudonymized to `vendor_id`/`buyer_user_id` placeholders.
+   - `wp_mercato_commissions`, `wp_mercato_payouts`, `wp_mercato_suborders` retained per BR-FIN-013 (US 1099 = 7y); pseudonymized to `vendor_id`/`buyer_user_id` placeholders.
    - Audit log retained per Vol 09 §6 (2y hot / 5y cold).
 4. Tenant subdomain disabled; CloudFront distribution returns 410 Gone.
 5. Vendor accounts notified — vendors may export their own data per BR-VEN-006 within an additional 30 days.

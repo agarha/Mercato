@@ -253,7 +253,7 @@ CREATE TABLE wp_mercato_product_media (
 ### 3.9 Orders & sub-orders
 
 ```sql
-CREATE TABLE wp_mercato_orders (
+CREATE TABLE wp_mercato_suborders (
   suborder_id      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   tenant_id        BIGINT UNSIGNED NOT NULL,
   parent_order_id  BIGINT UNSIGNED NOT NULL,    -- WC order (HPOS id)
@@ -297,7 +297,7 @@ PARTITION BY RANGE (YEAR(created_at)) (
 ### 3.10 Order items (snapshot per line)
 
 ```sql
-CREATE TABLE wp_mercato_order_items (
+CREATE TABLE wp_mercato_suborder_items (
   item_id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   suborder_id      BIGINT UNSIGNED NOT NULL,
   tenant_id        BIGINT UNSIGNED NOT NULL,
@@ -312,7 +312,7 @@ CREATE TABLE wp_mercato_order_items (
   PRIMARY KEY (item_id),
   KEY idx_suborder (suborder_id),
   KEY idx_product (product_id),
-  CONSTRAINT fk_oi_so FOREIGN KEY (suborder_id) REFERENCES wp_mercato_orders(suborder_id) ON DELETE CASCADE
+  CONSTRAINT fk_oi_so FOREIGN KEY (suborder_id) REFERENCES wp_mercato_suborders(suborder_id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 ```
 
@@ -337,7 +337,7 @@ CREATE TABLE wp_mercato_commissions (
   UNIQUE KEY uk_suborder_status (suborder_id, status), -- prevent dup pending
   KEY idx_vendor_status (vendor_id, status),
   KEY idx_tenant_created (tenant_id, created_at),
-  CONSTRAINT fk_c_so FOREIGN KEY (suborder_id) REFERENCES wp_mercato_orders(suborder_id),
+  CONSTRAINT fk_c_so FOREIGN KEY (suborder_id) REFERENCES wp_mercato_suborders(suborder_id),
   CONSTRAINT fk_c_vendor FOREIGN KEY (vendor_id) REFERENCES wp_mercato_vendors(vendor_id)
 ) ENGINE=InnoDB;
 ```
@@ -405,7 +405,7 @@ CREATE TABLE wp_mercato_refunds (
   created_at       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   PRIMARY KEY (refund_id),
   KEY idx_suborder (suborder_id),
-  CONSTRAINT fk_r_so FOREIGN KEY (suborder_id) REFERENCES wp_mercato_orders(suborder_id)
+  CONSTRAINT fk_r_so FOREIGN KEY (suborder_id) REFERENCES wp_mercato_suborders(suborder_id)
 ) ENGINE=InnoDB;
 ```
 
@@ -429,7 +429,7 @@ CREATE TABLE wp_mercato_disputes (
   PRIMARY KEY (dispute_id),
   KEY idx_suborder (suborder_id),
   KEY idx_tenant_status (tenant_id, status),
-  CONSTRAINT fk_d_so FOREIGN KEY (suborder_id) REFERENCES wp_mercato_orders(suborder_id)
+  CONSTRAINT fk_d_so FOREIGN KEY (suborder_id) REFERENCES wp_mercato_suborders(suborder_id)
 ) ENGINE=InnoDB;
 ```
 
@@ -852,7 +852,7 @@ CREATE TABLE wp_mercato_tax_records (
   created_at    DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   PRIMARY KEY (tax_id),
   KEY idx_suborder (suborder_id),
-  CONSTRAINT fk_tax_so FOREIGN KEY (suborder_id) REFERENCES wp_mercato_orders(suborder_id)
+  CONSTRAINT fk_tax_so FOREIGN KEY (suborder_id) REFERENCES wp_mercato_suborders(suborder_id)
 ) ENGINE=InnoDB;
 ```
 
@@ -967,7 +967,7 @@ Design principle: indexes derived from FSD query patterns, not speculative.
 | Query (from FSD) | Index used |
 |---|---|
 | "List vendors of tenant by status" | `idx_tenant_status` on `wp_mercato_vendors` |
-| "List sub-orders for vendor X status Y" | `idx_tenant_vendor_status` on `wp_mercato_orders` |
+| "List sub-orders for vendor X status Y" | `idx_tenant_vendor_status` on `wp_mercato_suborders` |
 | "Find commissions eligible for payout" | `idx_vendor_status` on `wp_mercato_commissions` |
 | "Audit by entity" | `idx_entity` on `wp_mercato_audit_log` |
 | "Outbox: pending events to publish" | `idx_status_next` on `wp_mercato_event_outbox` |
@@ -981,7 +981,7 @@ Avoid: composite indexes >5 columns; redundant single-column indexes whose colum
 | Table | Partition By | Cadence | Rationale |
 |---|---|---|---|
 | `wp_mercato_audit_log` | RANGE COLUMNS (occurred_at), monthly | maintenance cron | Cheap drop of old partitions |
-| `wp_mercato_orders` | RANGE (YEAR(created_at)), yearly | manual | Enterprise scale |
+| `wp_mercato_suborders` | RANGE (YEAR(created_at)), yearly | manual | Enterprise scale |
 | `wp_mercato_telemetry_buffer` | RANGE (TO_DAYS) | daily | Short-lived data |
 
 Maintenance job (Vol 11) adds the next-month partition on day 15 each month.
@@ -995,7 +995,7 @@ In Pooled multisite mode, beyond the application's query-builder injection, inst
 ```sql
 DELIMITER $$
 CREATE TRIGGER trg_tenant_guard_orders_ins
-BEFORE INSERT ON wp_mercato_orders
+BEFORE INSERT ON wp_mercato_suborders
 FOR EACH ROW
 BEGIN
   IF NEW.tenant_id IS NULL OR NEW.tenant_id <> @current_tenant THEN

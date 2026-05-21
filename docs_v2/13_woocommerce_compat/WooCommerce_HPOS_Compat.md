@@ -62,25 +62,25 @@ This is the canonical mapping. Implementation MUST not introduce ad-hoc mappings
 
 | WC Object | Mercato Object | Relationship | Notes |
 |---|---|---|---|
-| `WC_Order` (HPOS `wp_wc_orders.id`) | `wp_mercato_orders.parent_order_id` | 1 : N | Parent order is canonical for buyer-facing state, payment, totals |
-| `WC_Order_Item` (HPOS `wp_wc_order_items.order_item_id`) | `wp_mercato_order_items.item_id` (separately keyed) | 1 : 1 | Mercato item has a `wc_order_item_id` column |
+| `WC_Order` (HPOS `wp_wc_orders.id`) | `wp_mercato_suborders.parent_order_id` | 1 : N | Parent order is canonical for buyer-facing state, payment, totals |
+| `WC_Order_Item` (HPOS `wp_wc_order_items.order_item_id`) | `wp_mercato_suborder_items.item_id` (separately keyed) | 1 : 1 | Mercato item has a `wc_order_item_id` column |
 | `WC_Order_Refund` (HPOS) | `wp_mercato_refunds.refund_id` | 1 : 1 | Mercato refund stores `wc_refund_id` |
-| `WC_Customer` (user) | `wp_mercato_orders.buyer_user_id` (wp_users.ID) | 1 : N | |
-| (no WC concept) | `wp_mercato_orders.suborder_id` (vendor-keyed) | N per parent | Pure Mercato construct |
-| WC order status | `wp_mercato_orders.status` | independent state machines | See §3.3 |
-| Payment intent (Stripe-side) | `wp_mercato_orders.parent_order_id` → meta `_stripe_payment_intent` | 1 : 1 | Stripe is canonical for payment lifecycle |
+| `WC_Customer` (user) | `wp_mercato_suborders.buyer_user_id` (wp_users.ID) | 1 : N | |
+| (no WC concept) | `wp_mercato_suborders.suborder_id` (vendor-keyed) | N per parent | Pure Mercato construct |
+| WC order status | `wp_mercato_suborders.status` | independent state machines | See §3.3 |
+| Payment intent (Stripe-side) | `wp_mercato_suborders.parent_order_id` → meta `_stripe_payment_intent` | 1 : 1 | Stripe is canonical for payment lifecycle |
 
-### 3.2 Required Columns to Add to `wp_mercato_orders` (delta to Vol 06)
+### 3.2 Required Columns to Add to `wp_mercato_suborders` (delta to Vol 06)
 
 Vol 06 §3.9 defined `parent_order_id` referencing WC order ID. To make the mapping bulletproof, add:
 
 ```sql
-ALTER TABLE wp_mercato_orders
+ALTER TABLE wp_mercato_suborders
   ADD COLUMN parent_order_uuid VARCHAR(36) DEFAULT NULL COMMENT 'WC order UUID for distributed lookup',
   ADD COLUMN wc_payment_intent VARCHAR(64) DEFAULT NULL COMMENT 'Stripe PaymentIntent ID for traceability',
   ADD KEY idx_wc_payment_intent (wc_payment_intent);
 
-ALTER TABLE wp_mercato_order_items
+ALTER TABLE wp_mercato_suborder_items
   ADD COLUMN wc_order_item_id BIGINT UNSIGNED DEFAULT NULL,
   ADD KEY idx_wc_oi (wc_order_item_id);
 
@@ -278,7 +278,7 @@ If a tenant brings an existing WC store (with legacy orders) into Mercato:
 6. **Install Mercato** (one bundled suite per Vol 14).
 7. **Activate `mercato-core`** — auto-creates `wp_mercato_*` tables and runs migrations.
 8. **Activate domain plugins** in dependency order.
-9. **Reconcile legacy orders** — for orders without vendor splits, treat as single-vendor and backfill `wp_mercato_orders` with the tenant's primary vendor.
+9. **Reconcile legacy orders** — for orders without vendor splits, treat as single-vendor and backfill `wp_mercato_suborders` with the tenant's primary vendor.
 10. **Soak test** — read-only mode for 48 hours with shadow writes.
 
 ### 6.3 Rollback

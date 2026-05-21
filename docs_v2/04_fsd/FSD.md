@@ -318,7 +318,7 @@ stateDiagram-v2
 
 ### 7.3 Functional Requirements
 
-- **FR-ORD-001** On `woocommerce_new_order`, split cart items by `vendor_id`; one `wp_mercato_orders` row per vendor with proportional shipping and tax.
+- **FR-ORD-001** On `woocommerce_new_order`, split cart items by `vendor_id`; one `wp_mercato_suborders` row per vendor with proportional shipping and tax.
 - **FR-ORD-002** Shipping per vendor uses each vendor's shipping zone matrix.
 - **FR-ORD-003** Tax computed via Tax Engine (`mercato-tax-engine`) at order create; stored snapshot.
 - **FR-ORD-004** Vendor sees only their sub-orders; cross-vendor access returns 404 (not 403, to avoid existence leak).
