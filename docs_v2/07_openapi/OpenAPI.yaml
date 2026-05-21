@@ -1,0 +1,1507 @@
+# Volume 07 — Mercato Enterprise Marketplace Platform
+# OpenAPI 3.1 Specification (Engineering-Grade, Implementation-Ready)
+#
+# Document owner: Principal API Architect
+# Status: APPROVED FOR IMPLEMENTATION
+# Version: 2.0.0 (full rewrite of v1.0)
+# Cross-references: Vol 01 (Architecture §5, §7), Vol 04 (FSD), Vol 06 (Database), Vol 09 (Security)
+#
+# Conventions:
+# - All routes under /wp-json/mercato/v1/<resource>.
+# - JSON body camelCase; query params camelCase too.
+# - All listing endpoints support cursor pagination (?cursor=, ?limit=, default 20, max 100).
+# - All mutating endpoints accept Idempotency-Key header.
+# - All responses include X-Request-ID and W3C traceparent (when traced).
+# - Errors follow RFC 7807 Problem Details with platform error code.
+# - Auth: bearer JWT (capability token) OR API key (mer_live_… prefix).
+# - Multi-tenant: X-Tenant-ID required when JWT has multi-tenant scope; otherwise inferred.
+
+openapi: 3.1.0
+info:
+  title: Mercato Enterprise API
+  description: |
+    REST API for Mercato Multivendor Marketplace.
+    Engineering-grade contract; auto-validated in CI.
+    See Vol 04 FSD for the functional requirement behind each endpoint.
+  version: 2.0.0
+  contact:
+    name: Mercato Engineering
+    email: api@mercato.com
+  license:
+    name: Proprietary
+servers:
+  - url: https://api.mercato.com/v1
+    description: Production
+  - url: https://api-eu.mercato.com/v1
+    description: Production EU
+  - url: https://api-staging.mercato.com/v1
+    description: Staging
+  - url: https://{tenant}.{region}.mercatoapp.com/wp-json/mercato/v1
+    description: Tenant-routed REST surface
+    variables:
+      tenant:
+        default: example
+      region:
+        default: us-east-1
+security:
+  - bearerAuth: []
+  - apiKeyAuth: []
+
+# ---------------------------------------------------------------------------
+# 1. Components
+# ---------------------------------------------------------------------------
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Capability JWT issued by Control Plane.
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: "Format: ApiKey mer_live_xxxxxxxxxxxxxxxxxxx"
+  parameters:
+    TenantId:
+      name: X-Tenant-ID
+      in: header
+      required: false
+      schema: { type: string }
+      description: Required when JWT scope is multi-tenant.
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, maxLength: 96 }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, default: 20, minimum: 1, maximum: 100 }
+    Sort:
+      name: sort
+      in: query
+      required: false
+      schema: { type: string }
+      description: "Field name, prefix '-' for descending. Example: -created_at"
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      schema: { type: string }
+      description: "Optimistic concurrency: ETag from previous GET."
+    Locale:
+      name: Accept-Language
+      in: header
+      required: false
+      schema: { type: string }
+  headers:
+    XRequestId:
+      schema: { type: string }
+      description: Echo of (or generated) correlation id.
+    RateLimitLimit:
+      schema: { type: integer }
+    RateLimitRemaining:
+      schema: { type: integer }
+    RateLimitReset:
+      schema: { type: integer, description: "Unix epoch when bucket resets" }
+    RetryAfter:
+      schema: { type: integer }
+    ETag:
+      schema: { type: string }
+  responses:
+    Unauthorized:
+      description: Missing or invalid auth.
+      headers: { X-Request-ID: { $ref: '#/components/headers/XRequestId' } }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: Authenticated but lacks capability or tenant mismatch.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Resource not present in tenant scope.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: Duplicate / version conflict.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Validation:
+      description: Schema validation failed.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    RateLimited:
+      description: Rate limit exceeded.
+      headers:
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    DependencyUnavailable:
+      description: Downstream dependency unavailable (circuit open).
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Accepted:
+      description: Async accepted.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/JobAccepted' }
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type:      { type: string, format: uri, default: "https://mercato.com/problems/about:blank" }
+        title:     { type: string }
+        status:    { type: integer }
+        detail:    { type: string }
+        instance:  { type: string }
+        code:      { type: string, description: "Platform error code (Vol 04 §3.5)" }
+        request_id: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              path: { type: string }
+              message: { type: string }
+              rule: { type: string }
+    Pagination:
+      type: object
+      properties:
+        next_cursor: { type: string, nullable: true }
+        prev_cursor: { type: string, nullable: true }
+        total_estimate: { type: integer, nullable: true }
+    Money:
+      type: object
+      required: [amount_minor, currency]
+      properties:
+        amount_minor: { type: integer, format: int64, description: "INT minor units (cents)" }
+        currency:     { type: string, pattern: '^[A-Z]{3}$', description: "ISO-4217" }
+    Address:
+      type: object
+      required: [country]
+      properties:
+        full_name: { type: string }
+        line1:     { type: string }
+        line2:     { type: string }
+        city:      { type: string }
+        region:    { type: string }
+        postal_code: { type: string }
+        country:   { type: string, pattern: '^[A-Z]{2}$' }
+        phone:     { type: string }
+
+    JobAccepted:
+      type: object
+      required: [job_id, status, status_url]
+      properties:
+        job_id:     { type: string }
+        status:     { type: string, enum: [queued, running, succeeded, failed, canceled] }
+        status_url: { type: string, format: uri }
+        eta:        { type: integer, description: "Seconds" }
+
+    # ---- Vendor ----
+    Vendor:
+      type: object
+      required: [vendor_id, tenant_id, store_name, status]
+      properties:
+        vendor_id: { type: string }
+        tenant_id: { type: string }
+        store_name: { type: string }
+        store_slug: { type: string }
+        country: { type: string, pattern: '^[A-Z]{2}$' }
+        legal_entity_type: { type: string, enum: [individual, sole_prop, llc, corp, partnership, non_profit, other] }
+        contact_email: { type: string, format: email }
+        kyc_status: { type: string, enum: [not_started, pending, in_progress, verified, rejected, re_verification_required] }
+        status: { type: string, enum: [registered, pending_kyc, kyc_in_progress, kyc_verified, pending_approval, active, suspended, closure_pending, closed, rejected] }
+        reputation_score: { type: integer, minimum: 0, maximum: 100 }
+        settlement_currency: { type: string, pattern: '^[A-Z]{3}$' }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    VendorCreate:
+      type: object
+      required: [store_name, contact_email, country, legal_entity_type]
+      properties:
+        store_name: { type: string, maxLength: 255 }
+        contact_email: { type: string, format: email }
+        country: { type: string, pattern: '^[A-Z]{2}$' }
+        legal_entity_type: { type: string, enum: [individual, sole_prop, llc, corp, partnership, non_profit, other] }
+        tax_id: { type: string }
+    VendorListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Vendor' }
+        pagination: { $ref: '#/components/schemas/Pagination' }
+
+    # ---- Product ----
+    Product:
+      type: object
+      required: [product_id, vendor_id, title, price, currency_code, visibility]
+      properties:
+        product_id: { type: string }
+        vendor_id: { type: string }
+        sku: { type: string, nullable: true }
+        title: { type: string }
+        description_md: { type: string, nullable: true }
+        product_type: { type: string, enum: [simple, variable, grouped, digital, service, subscription] }
+        price: { $ref: '#/components/schemas/Money' }
+        compare_at: { $ref: '#/components/schemas/Money' }
+        stock_qty: { type: integer }
+        stock_policy: { type: string, enum: [track, infinite, external] }
+        visibility: { type: string, enum: [draft, pending_review, published, archived, rejected] }
+        primary_image_url: { type: string, format: uri, nullable: true }
+        attributes: { type: object, additionalProperties: true }
+        version: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ProductCreate:
+      type: object
+      required: [title, price, product_type]
+      properties:
+        title: { type: string, maxLength: 255 }
+        description_md: { type: string }
+        product_type: { type: string, enum: [simple, variable, grouped, digital, service, subscription] }
+        price: { $ref: '#/components/schemas/Money' }
+        sku: { type: string }
+        stock_qty: { type: integer, default: 0 }
+        attributes: { type: object, additionalProperties: true }
+        media: { type: array, items: { type: object, properties: { s3_key: { type: string }, alt_text: { type: string } } } }
+
+    # ---- Order / Sub-order ----
+    SubOrder:
+      type: object
+      properties:
+        suborder_id: { type: string }
+        parent_order_id: { type: string }
+        vendor_id: { type: string }
+        buyer_user_id: { type: string }
+        status: { type: string, enum: [created, acknowledged, processing, shipped, delivered, completed, refunded, disputed, auto_canceled, payment_failed, closed] }
+        currency_code: { type: string }
+        subtotal: { $ref: '#/components/schemas/Money' }
+        shipping: { $ref: '#/components/schemas/Money' }
+        tax: { $ref: '#/components/schemas/Money' }
+        discount: { $ref: '#/components/schemas/Money' }
+        total: { $ref: '#/components/schemas/Money' }
+        ship_to: { $ref: '#/components/schemas/Address' }
+        items: { type: array, items: { $ref: '#/components/schemas/OrderItem' } }
+        tracking_number: { type: string, nullable: true }
+        tracking_carrier: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+    OrderItem:
+      type: object
+      properties:
+        item_id: { type: string }
+        product_id: { type: string }
+        variation_id: { type: string, nullable: true }
+        title: { type: string }
+        sku: { type: string }
+        quantity: { type: integer }
+        unit_price: { $ref: '#/components/schemas/Money' }
+        line_total: { $ref: '#/components/schemas/Money' }
+    SubOrderStatusUpdate:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [acknowledged, processing, shipped, delivered, refunded] }
+        tracking_number: { type: string }
+        tracking_carrier: { type: string }
+        note: { type: string }
+
+    # ---- Commission / Payout ----
+    Commission:
+      type: object
+      properties:
+        commission_id: { type: string }
+        suborder_id: { type: string }
+        vendor_id: { type: string }
+        base: { $ref: '#/components/schemas/Money' }
+        fee: { $ref: '#/components/schemas/Money' }
+        net_vendor: { $ref: '#/components/schemas/Money' }
+        status: { type: string, enum: [pending, held, eligible, paid, reversed, negative_balance] }
+        rule_snapshot: { type: object }
+        created_at: { type: string, format: date-time }
+    CommissionRule:
+      type: object
+      properties:
+        rule_id: { type: string }
+        scope_type: { type: string, enum: [global, category, vendor, product] }
+        scope_id: { type: string, nullable: true }
+        rule_type: { type: string, enum: [percentage, flat, tiered_percentage, hybrid] }
+        config: { type: object }
+        effective_from: { type: string, format: date-time }
+        effective_to: { type: string, format: date-time, nullable: true }
+    Payout:
+      type: object
+      properties:
+        payout_id: { type: string }
+        batch_id: { type: string }
+        vendor_id: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        status: { type: string, enum: [scheduled, processing, succeeded, failed, retrying, manual_review, reversed] }
+        stripe_transfer_id: { type: string, nullable: true }
+        failure_code: { type: string, nullable: true }
+        scheduled_for: { type: string, format: date-time }
+        completed_at: { type: string, format: date-time, nullable: true }
+
+    # ---- Dispute / Review ----
+    Dispute:
+      type: object
+      properties:
+        dispute_id: { type: string }
+        suborder_id: { type: string }
+        status: { type: string }
+        reason_code: { type: string }
+        description: { type: string }
+        resolution: { type: string, nullable: true }
+        resolution_amount: { $ref: '#/components/schemas/Money', nullable: true }
+        created_at: { type: string, format: date-time }
+        closed_at: { type: string, format: date-time, nullable: true }
+    DisputeOpen:
+      type: object
+      required: [suborder_id, reason_code, description]
+      properties:
+        suborder_id: { type: string }
+        reason_code: { type: string }
+        description: { type: string, maxLength: 4000 }
+        evidence_s3_keys: { type: array, items: { type: string }, maxItems: 10 }
+    Review:
+      type: object
+      properties:
+        review_id: { type: string }
+        product_id: { type: string, nullable: true }
+        vendor_id: { type: string }
+        suborder_id: { type: string }
+        buyer_user_id: { type: string }
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        title: { type: string, nullable: true }
+        body: { type: string, nullable: true }
+        status: { type: string, enum: [pending_moderation, published, hidden, rejected] }
+
+    # ---- Subscriptions & Tenant ----
+    TenantSettings:
+      type: object
+      properties:
+        version: { type: integer }
+        settings: { type: object }
+    Subscription:
+      type: object
+      properties:
+        subscription_id: { type: string }
+        scope_type: { type: string, enum: [tenant, vendor, buyer] }
+        scope_id: { type: string }
+        plan_code: { type: string }
+        status: { type: string, enum: [trialing, active, past_due, canceled, expired] }
+        current_period_start: { type: string, format: date-time }
+        current_period_end: { type: string, format: date-time }
+
+    # ---- AI ----
+    AICompletionRequest:
+      type: object
+      required: [feature, prompt]
+      properties:
+        feature: { type: string, enum: [product_description, message_reply, support_summary, search_query] }
+        prompt: { type: string, maxLength: 8000 }
+        context: { type: object, additionalProperties: true }
+        stream: { type: boolean, default: false }
+    AICompletionResponse:
+      type: object
+      properties:
+        completion_id: { type: string }
+        text: { type: string }
+        provider: { type: string }
+        model: { type: string }
+        tokens_used: { type: integer }
+        cost_micro_usd: { type: integer }
+
+# ---------------------------------------------------------------------------
+# 2. Paths
+# ---------------------------------------------------------------------------
+paths:
+
+  # --- Vendors ---
+  /vendors:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      tags: [Vendors]
+      summary: List vendors
+      operationId: listVendors
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: q
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Request-ID: { $ref: '#/components/headers/XRequestId' }
+            X-RateLimit-Limit: { $ref: '#/components/headers/RateLimitLimit' }
+            X-RateLimit-Remaining: { $ref: '#/components/headers/RateLimitRemaining' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VendorListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    post:
+      tags: [Vendors]
+      summary: Register a vendor
+      operationId: createVendor
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VendorCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vendor' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Validation' }
+
+  /vendors/{vendor_id}:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - name: vendor_id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Vendors]
+      operationId: getVendor
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vendor' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Vendors]
+      operationId: updateVendor
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VendorCreate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vendor' }
+        '412':
+          description: ETag mismatch (optimistic concurrency)
+
+  /vendors/{vendor_id}/approve:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - name: vendor_id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Vendors]
+      operationId: approveVendor
+      responses:
+        '200':
+          description: Approved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vendor' }
+
+  /vendors/{vendor_id}/suspend:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - name: vendor_id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Vendors]
+      operationId: suspendVendor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Suspended
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vendor' }
+
+  /vendors/{vendor_id}/kyc/init:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - name: vendor_id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Vendors, KYC]
+      operationId: initVendorKyc
+      responses:
+        '200':
+          description: KYC onboarding URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  onboarding_url: { type: string, format: uri }
+                  provider_ref: { type: string }
+
+  /vendors/{vendor_id}/data-export:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - name: vendor_id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Vendors, Privacy]
+      operationId: requestVendorDataExport
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+
+  /vendors/{vendor_id}/staff:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - name: vendor_id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Vendors]
+      operationId: listVendorStaff
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        staff_id: { type: string }
+                        user_id: { type: string }
+                        role_slug: { type: string }
+                        status: { type: string }
+    post:
+      tags: [Vendors]
+      operationId: inviteVendorStaff
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, role_slug]
+              properties:
+                email: { type: string, format: email }
+                role_slug: { type: string, enum: [vendor_manager, vendor_fulfiller, vendor_support, vendor_finance, vendor_read_only] }
+      responses:
+        '201':
+          description: Invited
+
+  # --- Products ---
+  /products:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      tags: [Products]
+      operationId: listProducts
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - name: vendor_id
+          in: query
+          schema: { type: string }
+        - name: visibility
+          in: query
+          schema: { type: string }
+        - name: q
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Product' }
+                  pagination: { $ref: '#/components/schemas/Pagination' }
+    post:
+      tags: [Products]
+      operationId: createProduct
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+
+  /products/{product_id}:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - name: product_id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Products]
+      operationId: getProduct
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+    patch:
+      tags: [Products]
+      operationId: updateProduct
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductCreate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+    delete:
+      tags: [Products]
+      operationId: archiveProduct
+      responses:
+        '204':
+          description: Archived
+
+  /products/bulk-import:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    post:
+      tags: [Products]
+      operationId: bulkImportProducts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [s3_key]
+              properties:
+                s3_key: { type: string }
+                dry_run: { type: boolean, default: false }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+
+  /products/{product_id}/variations:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - name: product_id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Products]
+      operationId: listProductVariations
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+    post:
+      tags: [Products]
+      operationId: createProductVariation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [attributes, price]
+              properties:
+                sku: { type: string }
+                attributes: { type: object }
+                price: { $ref: '#/components/schemas/Money' }
+                stock_qty: { type: integer }
+      responses:
+        '201':
+          description: Created
+
+  # --- Media presign ---
+  /media/presign:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    post:
+      tags: [Media]
+      operationId: presignUpload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [purpose, mime, bytes]
+              properties:
+                purpose: { type: string, enum: [product, message, dispute, kyc, report] }
+                mime:    { type: string }
+                bytes:   { type: integer, maximum: 10485760 }
+      responses:
+        '200':
+          description: Presigned URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  s3_key: { type: string }
+                  upload_url: { type: string, format: uri }
+                  expires_in: { type: integer }
+
+  # --- Orders / Sub-orders ---
+  /suborders:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      tags: [Orders]
+      operationId: listSubOrders
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - name: vendor_id
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: created_after
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/SubOrder' }
+                  pagination: { $ref: '#/components/schemas/Pagination' }
+
+  /suborders/{suborder_id}:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - name: suborder_id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Orders]
+      operationId: getSubOrder
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubOrder' }
+
+  /suborders/{suborder_id}/status:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - name: suborder_id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Orders]
+      operationId: updateSubOrderStatus
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubOrderStatusUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubOrder' }
+
+  /suborders/{suborder_id}/refunds:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - name: suborder_id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Orders, Refunds]
+      operationId: createRefund
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, reason_code]
+              properties:
+                amount: { $ref: '#/components/schemas/Money' }
+                reason_code: { type: string }
+                items: { type: array, items: { type: object, properties: { item_id: { type: string }, quantity: { type: integer } } } }
+      responses:
+        '201':
+          description: Refund initiated
+
+  # --- Commissions ---
+  /commission-rules:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      tags: [Commissions]
+      operationId: listCommissionRules
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/CommissionRule' }
+    post:
+      tags: [Commissions]
+      operationId: createCommissionRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommissionRule' }
+      responses:
+        '201':
+          description: Created
+
+  /commission-rules/preview:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    post:
+      tags: [Commissions]
+      operationId: previewCommissionRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rule: { $ref: '#/components/schemas/CommissionRule' }
+                sample_order:
+                  type: object
+      responses:
+        '200':
+          description: Preview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  base: { $ref: '#/components/schemas/Money' }
+                  fee: { $ref: '#/components/schemas/Money' }
+                  net_vendor: { $ref: '#/components/schemas/Money' }
+
+  /commissions:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      tags: [Commissions]
+      operationId: listCommissions
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - name: vendor_id
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Commission' }
+
+  # --- Payouts ---
+  /payouts:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      tags: [Payouts]
+      operationId: listPayouts
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - name: vendor_id
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Payout' }
+
+  /payouts/batches:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    post:
+      tags: [Payouts]
+      operationId: triggerPayoutBatch
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                vendor_ids: { type: array, items: { type: string } }
+                schedule_for: { type: string, format: date-time }
+      responses:
+        '202': { $ref: '#/components/responses/Accepted' }
+
+  /payouts/reconcile:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      tags: [Payouts, Finance]
+      operationId: reconcilePayouts
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Reconciliation report
+
+  # --- Disputes ---
+  /disputes:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      tags: [Disputes]
+      operationId: listDisputes
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Dispute' }
+    post:
+      tags: [Disputes]
+      operationId: openDispute
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DisputeOpen' }
+      responses:
+        '201':
+          description: Opened
+
+  /disputes/{dispute_id}/resolve:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - name: dispute_id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Disputes]
+      operationId: resolveDispute
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resolution]
+              properties:
+                resolution: { type: string, enum: [full_refund, partial_refund, replacement, denied, custom] }
+                amount: { $ref: '#/components/schemas/Money' }
+                note: { type: string }
+      responses:
+        '200':
+          description: Resolved
+
+  # --- Reviews ---
+  /reviews:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      tags: [Reviews]
+      operationId: listReviews
+      parameters:
+        - name: product_id
+          in: query
+          schema: { type: string }
+        - name: vendor_id
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Review' }
+    post:
+      tags: [Reviews]
+      operationId: createReview
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [suborder_id, rating]
+              properties:
+                suborder_id: { type: string }
+                product_id: { type: string }
+                rating: { type: integer, minimum: 1, maximum: 5 }
+                title: { type: string }
+                body: { type: string }
+      responses:
+        '201':
+          description: Created
+
+  # --- Messages ---
+  /threads:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      tags: [Messaging]
+      operationId: listThreads
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Messaging]
+      operationId: createThread
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vendor_id, body]
+              properties:
+                vendor_id: { type: string }
+                context_type: { type: string, enum: [product, order, generic] }
+                context_id: { type: string }
+                subject: { type: string }
+                body: { type: string }
+      responses:
+        '201':
+          description: Created
+
+  /threads/{thread_id}/messages:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - name: thread_id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Messaging]
+      operationId: postMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string }
+                attachment_s3_keys: { type: array, items: { type: string }, maxItems: 5 }
+      responses:
+        '201':
+          description: Sent
+
+  # --- Catalog Search ---
+  /search/products:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      tags: [Search]
+      operationId: searchProducts
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: vendor_id
+          in: query
+          schema: { type: string }
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: price_min
+          in: query
+          schema: { type: integer }
+        - name: price_max
+          in: query
+          schema: { type: integer }
+        - name: rating_min
+          in: query
+          schema: { type: integer }
+        - name: ships_to
+          in: query
+          schema: { type: string, pattern: '^[A-Z]{2}$' }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Product' }
+                  facets: { type: object }
+                  pagination: { $ref: '#/components/schemas/Pagination' }
+
+  # --- AI ---
+  /ai/completions:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    post:
+      tags: [AI]
+      operationId: aiCompletion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AICompletionRequest' }
+      responses:
+        '200':
+          description: Completed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AICompletionResponse' }
+            text/event-stream:
+              schema:
+                type: string
+                description: SSE stream when stream=true
+        '402':
+          description: AI feature disabled or quota exceeded
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /ai/usage:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      tags: [AI]
+      operationId: getAiUsage
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+        - name: vendor_id
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tokens: { type: integer }
+                  cost_micro_usd: { type: integer }
+                  per_feature:
+                    type: object
+
+  # --- Tenant ---
+  /tenant/settings:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      tags: [Tenant]
+      operationId: getTenantSettings
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TenantSettings' }
+    patch:
+      tags: [Tenant]
+      operationId: updateTenantSettings
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                settings: { type: object }
+      responses:
+        '200':
+          description: Updated
+
+  /tenant/subscriptions:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      tags: [Subscriptions]
+      operationId: getTenantSubscription
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subscription' }
+
+  # --- Webhooks (subscription) ---
+  /webhooks:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      tags: [Webhooks]
+      operationId: listWebhooks
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Webhooks]
+      operationId: createWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, events]
+              properties:
+                url: { type: string, format: uri }
+                events: { type: array, items: { type: string } }
+      responses:
+        '201':
+          description: Created with secret in response (one-time)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  webhook_id: { type: string }
+                  secret: { type: string, description: "One-time view; store securely" }
+
+  # --- Inbound webhooks (Mercato receives) ---
+  /webhooks/stripe/{tenant_id}:
+    parameters:
+      - name: tenant_id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Webhooks]
+      operationId: receiveStripeWebhook
+      security: []   # signature-verified, not bearer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '2XX': { description: Acknowledged }
+
+  /webhooks/kyc/{tenant_id}:
+    parameters:
+      - name: tenant_id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Webhooks, KYC]
+      operationId: receiveKycWebhook
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '2XX': { description: Acknowledged }
+
+  # --- Audit & Health ---
+  /audit:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      tags: [Audit]
+      operationId: queryAudit
+      parameters:
+        - name: entity_type
+          in: query
+          schema: { type: string }
+        - name: entity_id
+          in: query
+          schema: { type: string }
+        - name: actor_id
+          in: query
+          schema: { type: string }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+
+  /healthz:
+    get:
+      tags: [System]
+      operationId: liveness
+      security: []
+      responses:
+        '200': { description: Live }
+  /readyz:
+    get:
+      tags: [System]
+      operationId: readiness
+      security: []
+      responses:
+        '200': { description: Ready }
+        '503': { description: Not ready }
+  /metrics:
+    get:
+      tags: [System]
+      operationId: metrics
+      security: []
+      responses:
+        '200':
+          description: Prometheus exposition format
+          content:
+            text/plain:
+              schema: { type: string }
+
+# ---------------------------------------------------------------------------
+# 3. AsyncAPI (Events) - Linked Companion Document
+# ---------------------------------------------------------------------------
+# The async surface (Kafka topics + event schemas) lives at:
+#   docs_v2/07_openapi/AsyncAPI.yaml
+# Every event_type emitted by any mercato-* plugin MUST be declared there.
+# See Vol 01 §7 for taxonomy & semantics.

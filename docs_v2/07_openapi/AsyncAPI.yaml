@@ -1,0 +1,361 @@
+asyncapi: 2.6.0
+info:
+  title: Mercato Event Bus
+  version: 2.0.0
+  description: |
+    Companion to Vol 07 OpenAPI. Declares every Kafka topic, every event
+    emitted by every mercato-* plugin, and the JSON Schema of each payload.
+    Each event uses the canonical envelope (Vol 01 §7.2).
+defaultContentType: application/json
+servers:
+  msk-prod:
+    url: kafka-prod.mercato.com:9094
+    protocol: kafka-secure
+    description: Production Amazon MSK cluster
+channels:
+  mercato.transactional:
+    description: High-priority transactional events. Partition key = tenant_id:aggregate_id.
+    subscribe:
+      message:
+        oneOf:
+          - $ref: '#/components/messages/OrderSubOrderCreated'
+          - $ref: '#/components/messages/OrderStatusChanged'
+          - $ref: '#/components/messages/CommissionRecorded'
+          - $ref: '#/components/messages/PayoutSucceeded'
+          - $ref: '#/components/messages/PayoutFailed'
+          - $ref: '#/components/messages/RefundCreated'
+          - $ref: '#/components/messages/DisputeOpened'
+          - $ref: '#/components/messages/VendorActivated'
+          - $ref: '#/components/messages/VendorKycCompleted'
+
+  mercato.catalog:
+    description: Catalog events. Partition key = tenant_id:product_id.
+    subscribe:
+      message:
+        oneOf:
+          - $ref: '#/components/messages/ProductUpserted'
+          - $ref: '#/components/messages/ProductArchived'
+          - $ref: '#/components/messages/ReviewUpserted'
+
+  mercato.notifications:
+    description: Notification dispatch events. Partition key = tenant_id:user_id.
+    subscribe:
+      message:
+        oneOf:
+          - $ref: '#/components/messages/NotificationRequested'
+
+  mercato.search-sync:
+    description: Search indexer events. Partition key = tenant_id:product_id.
+    subscribe:
+      message:
+        oneOf:
+          - $ref: '#/components/messages/SearchIndexRequested'
+
+  mercato.ai-jobs:
+    description: AI background job events. Partition key = tenant_id:job_id.
+    subscribe:
+      message:
+        oneOf:
+          - $ref: '#/components/messages/AIJobRequested'
+          - $ref: '#/components/messages/AIJobCompleted'
+
+  mercato.audit:
+    description: Immutable security/audit events. Partition key = tenant_id.
+    subscribe:
+      message:
+        oneOf:
+          - $ref: '#/components/messages/AdminActionLogged'
+
+components:
+  schemas:
+    Envelope:
+      type: object
+      required: [event_id, event_type, schema_version, occurred_at, tenant_id, source, data]
+      properties:
+        event_id: { type: string, description: ULID }
+        event_type: { type: string }
+        schema_version: { type: string }
+        occurred_at: { type: string, format: date-time }
+        tenant_id: { type: string }
+        correlation_id: { type: string }
+        causation_id: { type: string }
+        actor:
+          type: object
+          properties:
+            type: { type: string, enum: [user, system, webhook] }
+            id: { type: string }
+        source:
+          type: object
+          properties:
+            plugin: { type: string }
+            version: { type: string }
+        data: { type: object }
+        metadata: { type: object }
+
+    OrderSubOrderCreatedData:
+      type: object
+      properties:
+        suborder_id: { type: string }
+        parent_order_id: { type: string }
+        vendor_id: { type: string }
+        buyer_user_id: { type: string }
+        currency_code: { type: string }
+        total_minor: { type: integer }
+        items: { type: array }
+
+    OrderStatusChangedData:
+      type: object
+      properties:
+        suborder_id: { type: string }
+        from_status: { type: string }
+        to_status: { type: string }
+        actor: { type: object }
+
+    CommissionRecordedData:
+      type: object
+      properties:
+        commission_id: { type: string }
+        suborder_id: { type: string }
+        vendor_id: { type: string }
+        fee_minor: { type: integer }
+        net_vendor_minor: { type: integer }
+
+    PayoutSucceededData:
+      type: object
+      properties:
+        payout_id: { type: string }
+        vendor_id: { type: string }
+        amount_minor: { type: integer }
+        stripe_transfer_id: { type: string }
+
+    PayoutFailedData:
+      type: object
+      properties:
+        payout_id: { type: string }
+        vendor_id: { type: string }
+        failure_code: { type: string }
+        failure_message: { type: string }
+        retry_in_seconds: { type: integer }
+
+    RefundCreatedData:
+      type: object
+      properties:
+        refund_id: { type: string }
+        suborder_id: { type: string }
+        amount_minor: { type: integer }
+        reason_code: { type: string }
+
+    DisputeOpenedData:
+      type: object
+      properties:
+        dispute_id: { type: string }
+        suborder_id: { type: string }
+        opened_by: { type: string }
+        reason_code: { type: string }
+
+    VendorActivatedData:
+      type: object
+      properties:
+        vendor_id: { type: string }
+
+    VendorKycCompletedData:
+      type: object
+      properties:
+        vendor_id: { type: string }
+        kyc_status: { type: string }
+
+    ProductUpsertedData:
+      type: object
+      properties:
+        product_id: { type: string }
+        vendor_id: { type: string }
+        operation: { type: string, enum: [create, update] }
+
+    ProductArchivedData:
+      type: object
+      properties:
+        product_id: { type: string }
+
+    ReviewUpsertedData:
+      type: object
+      properties:
+        review_id: { type: string }
+        product_id: { type: string }
+        vendor_id: { type: string }
+        rating: { type: integer }
+
+    NotificationRequestedData:
+      type: object
+      properties:
+        template_key: { type: string }
+        recipient_user_id: { type: string }
+        channel: { type: string, enum: [email, sms, push, in_app] }
+        variables: { type: object }
+
+    SearchIndexRequestedData:
+      type: object
+      properties:
+        product_id: { type: string }
+        operation: { type: string, enum: [upsert, delete] }
+
+    AIJobRequestedData:
+      type: object
+      properties:
+        job_id: { type: string }
+        feature: { type: string }
+        input: { type: object }
+
+    AIJobCompletedData:
+      type: object
+      properties:
+        job_id: { type: string }
+        output: { type: object }
+        usage: { type: object }
+
+    AdminActionLoggedData:
+      type: object
+      properties:
+        actor_id: { type: string }
+        action: { type: string }
+        entity_type: { type: string }
+        entity_id: { type: string }
+        before_state: { type: object }
+        after_state: { type: object }
+
+  messages:
+    OrderSubOrderCreated:
+      name: mercato.order.suborder.created.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data: { $ref: '#/components/schemas/OrderSubOrderCreatedData' }
+    OrderStatusChanged:
+      name: mercato.order.status.changed.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data: { $ref: '#/components/schemas/OrderStatusChangedData' }
+    CommissionRecorded:
+      name: mercato.commission.recorded.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data: { $ref: '#/components/schemas/CommissionRecordedData' }
+    PayoutSucceeded:
+      name: mercato.payout.succeeded.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data: { $ref: '#/components/schemas/PayoutSucceededData' }
+    PayoutFailed:
+      name: mercato.payout.failed.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data: { $ref: '#/components/schemas/PayoutFailedData' }
+    RefundCreated:
+      name: mercato.refund.created.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data: { $ref: '#/components/schemas/RefundCreatedData' }
+    DisputeOpened:
+      name: mercato.dispute.opened.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data: { $ref: '#/components/schemas/DisputeOpenedData' }
+    VendorActivated:
+      name: mercato.vendor.activated.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data: { $ref: '#/components/schemas/VendorActivatedData' }
+    VendorKycCompleted:
+      name: mercato.vendor.kyc.completed.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data: { $ref: '#/components/schemas/VendorKycCompletedData' }
+    ProductUpserted:
+      name: mercato.product.upserted.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data: { $ref: '#/components/schemas/ProductUpsertedData' }
+    ProductArchived:
+      name: mercato.product.archived.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data: { $ref: '#/components/schemas/ProductArchivedData' }
+    ReviewUpserted:
+      name: mercato.review.upserted.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data: { $ref: '#/components/schemas/ReviewUpsertedData' }
+    NotificationRequested:
+      name: mercato.notification.requested.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data: { $ref: '#/components/schemas/NotificationRequestedData' }
+    SearchIndexRequested:
+      name: mercato.search.index.requested.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data: { $ref: '#/components/schemas/SearchIndexRequestedData' }
+    AIJobRequested:
+      name: mercato.ai.job.requested.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data: { $ref: '#/components/schemas/AIJobRequestedData' }
+    AIJobCompleted:
+      name: mercato.ai.job.completed.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data: { $ref: '#/components/schemas/AIJobCompletedData' }
+    AdminActionLogged:
+      name: mercato.audit.admin_action.logged.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data: { $ref: '#/components/schemas/AdminActionLoggedData' }
