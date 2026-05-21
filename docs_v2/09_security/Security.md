@@ -2,7 +2,7 @@
 ## Security Architecture & Compliance (Engineering-Grade, Implementation-Ready)
 
 > Document owner: Security Architect + CISO / Compliance Lead
-> Status: APPROVED FOR IMPLEMENTATION
+> Status: Implementation Baseline v2.0 — Approved for MVP planning; ADRs pending
 > Version: 2.0.0 (full rewrite of v1.0)
 > Cross-references: Vol 01 (Architecture §5.3, §11), Vol 03 (BRD §8 regulatory), Vol 04 (FSD), Vol 06 (DDL), Vol 11 (DevOps §7)
 

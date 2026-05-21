@@ -2,7 +2,7 @@
 ## Database & DDL Specification (Engineering-Grade, Implementation-Ready)
 
 > Document owner: Principal Database Architect
-> Status: APPROVED FOR IMPLEMENTATION
+> Status: Implementation Baseline v2.0 — Approved for MVP planning; ADRs pending
 > Version: 2.0.0 (full rewrite of v1.0)
 > Cross-references: Vol 01 (Architecture §6, §8), Vol 04 (FSD), Vol 09 (Security §3, §6)
 

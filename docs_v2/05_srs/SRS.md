@@ -2,7 +2,7 @@
 ## Software Requirements Specification (Engineering-Grade, Implementation-Ready)
 
 > Document owner: Principal Software Architect + QA Architect
-> Status: APPROVED FOR IMPLEMENTATION
+> Status: Implementation Baseline v2.0 — Approved for MVP planning; ADRs pending
 > Version: 2.0.0 (full rewrite of v1.0)
 > Cross-references: Vol 01–04, Vol 06–11, ISO/IEC/IEEE 29148:2018
 

@@ -2,7 +2,7 @@
 ## QA & UAT Specification (Engineering-Grade, Implementation-Ready)
 
 > Document owner: QA / Test Architect
-> Status: APPROVED FOR IMPLEMENTATION
+> Status: Implementation Baseline v2.0 — Approved for MVP planning; ADRs pending
 > Version: 2.0.0 (full rewrite of v1.0)
 > Cross-references: Vol 02 (PRD stories), Vol 04 (FSD FR-IDs), Vol 05 (SRS NFRs), Vol 09 (Security)
 

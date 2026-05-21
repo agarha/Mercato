@@ -2,7 +2,7 @@
 ## AI Collaboration & Copilot Specification (Engineering-Grade, Implementation-Ready)
 
 > Document owner: AI / LLM Systems Architect
-> Status: APPROVED FOR IMPLEMENTATION
+> Status: Implementation Baseline v2.0 — Approved for MVP planning; ADRs pending
 > Version: 2.0.0 (full rewrite of v1.0)
 > Cross-references: Vol 01 (Architecture §5), Vol 02 (PRD EPIC-17), Vol 04 (FSD §20), Vol 09 (Security §3.7, §13.6)
 

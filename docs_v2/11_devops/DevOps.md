@@ -2,7 +2,7 @@
 ## DevOps & Infrastructure Specification (Engineering-Grade, Implementation-Ready)
 
 > Document owner: DevOps Architect / Head of SRE
-> Status: APPROVED FOR IMPLEMENTATION
+> Status: Implementation Baseline v2.0 — Approved for MVP planning; ADRs pending
 > Version: 2.0.0 (full rewrite of v1.0)
 > Cross-references: Vol 01 (Architecture §10–§14), Vol 09 (Security), Vol 10 (QA pipeline gates)
 

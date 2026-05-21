@@ -2,41 +2,47 @@
 
 This repository contains the implementation-ready documentation suite for the **Mercato Enterprise Marketplace Platform** — a highly modular, microservices-augmented, security-first multivendor marketplace built on top of WordPress / WooCommerce.
 
-## Documentation Suite
+**📚 Start here:** [docs_v2/README.md](docs_v2/README.md) — full navigation, status badges, and changelog.
 
-Twelve volumes, each engineered to be directly implementable by engineering, product, design, security, QA, and DevOps teams.
+**🚀 If you are an engineer about to build, read first:** [docs_v2/00_mvp_cut/MVP_Cut.md](docs_v2/00_mvp_cut/MVP_Cut.md)
 
-| Vol | Document | Owner |
-|---|---|---|
-| 01 | [Architecture Blueprint](docs_v2/01_architecture/Blueprint.md) | Principal Software Architect |
-| 02 | [Product Requirements (PRD)](docs_v2/02_prd/PRD.md) | Chief Product Officer |
-| 03 | [Business Requirements (BRD)](docs_v2/03_brd/BRD.md) | CPO + Compliance |
-| 04 | [Functional Spec (FSD)](docs_v2/04_fsd/FSD.md) | Architect + Tech Leads |
-| 05 | [Software Requirements (SRS)](docs_v2/05_srs/SRS.md) | Architect + QA |
-| 06 | [Database & DDL](docs_v2/06_database/Database.md) | Principal DBA |
-| 07 | [OpenAPI 3.1](docs_v2/07_openapi/OpenAPI.yaml) + [AsyncAPI 2.6](docs_v2/07_openapi/AsyncAPI.yaml) | API Architect |
-| 08 | [UX & Wireframes](docs_v2/08_ux/Wireframes.md) | UX Architect |
-| 09 | [Security & Compliance](docs_v2/09_security/Security.md) | Security Architect / CISO |
-| 10 | [QA & UAT](docs_v2/10_qa/QA_Spec.md) | QA / Test Architect |
-| 11 | [DevOps & Infrastructure](docs_v2/11_devops/DevOps.md) | Head of SRE |
-| 12 | [AI Collaboration](docs_v2/12_ai/AI_Copilot.md) | AI / LLM Architect |
+## Documentation Suite (v2.0.1)
+
+| Vol | Document |
+|---|---|
+| 🚀 00 | [MVP Implementation Cut](docs_v2/00_mvp_cut/MVP_Cut.md) |
+| 01 | [Architecture Blueprint](docs_v2/01_architecture/Blueprint.md) + [ADR log](docs_v2/01_architecture/adr/) |
+| 02 | [PRD](docs_v2/02_prd/PRD.md) |
+| 03 | [BRD](docs_v2/03_brd/BRD.md) |
+| 04 | [FSD](docs_v2/04_fsd/FSD.md) |
+| 05 | [SRS](docs_v2/05_srs/SRS.md) |
+| 06 | [Database & DDL](docs_v2/06_database/Database.md) + [Accounting Ledger Extension](docs_v2/06_database/Database_Accounting_Ledger.md) |
+| 07 | [OpenAPI](docs_v2/07_openapi/OpenAPI.yaml) + [AsyncAPI](docs_v2/07_openapi/AsyncAPI.yaml) |
+| 08 | [UX & Wireframes](docs_v2/08_ux/Wireframes.md) |
+| 09 | [Security & Compliance](docs_v2/09_security/Security.md) |
+| 10 | [QA & UAT](docs_v2/10_qa/QA_Spec.md) |
+| 11 | [DevOps & Infrastructure](docs_v2/11_devops/DevOps.md) |
+| 12 | [AI Collaboration](docs_v2/12_ai/AI_Copilot.md) |
+| 13 | [WooCommerce/HPOS Compatibility](docs_v2/13_woocommerce_compat/WooCommerce_HPOS_Compat.md) |
+| 14 | [Plugin Packaging Strategy](docs_v2/14_packaging/Plugin_Packaging.md) |
+| 15 | [Operational Runbooks](docs_v2/15_runbooks/) |
 
 ## Synthesis Deliverables
 
-- 📊 [Gap Matrix](docs_v2/deliverables/Mercato_Gap_Matrix.xlsx) — 60 tracked items across volumes, with severity, priority, owner.
-- 📋 [Implementation Backlog](docs_v2/deliverables/Mercato_Implementation_Backlog.xlsx) — 98 user stories across 20 epics + cross-cutting, phased MVP → P4.
-- 📄 [Readiness Scorecard & Final Blueprint](docs_v2/deliverables/Mercato_Readiness_Scorecard_and_Blueprint.docx) — executive scorecard with the four-phase engineering delivery sequence.
+- 📊 [Gap Matrix](docs_v2/deliverables/Gap_Matrix.md) (also [.xlsx](docs_v2/deliverables/Mercato_Gap_Matrix.xlsx))
+- 📋 [Implementation Backlog](docs_v2/deliverables/Implementation_Backlog.md) (also [.xlsx](docs_v2/deliverables/Mercato_Implementation_Backlog.xlsx))
+- 📄 [Readiness Scorecard & Blueprint](docs_v2/deliverables/Readiness_Scorecard.md) (also [.docx](docs_v2/deliverables/Mercato_Readiness_Scorecard_and_Blueprint.docx))
 
 ## Architectural Principles
 
-1. **Modularity over monolith** — one `mercato-core` + 18 domain plugins + 9 integration adapters, behind a versioned SDK contract.
-2. **Microservices-augmented** — control plane + AI + search + notification services offload high-velocity workloads from WordPress.
-3. **100% security compliance posture** — PCI-DSS SAQ-A (Stripe Elements), GDPR + CCPA with automated DSAR, SOC-2 Type II, OWASP ASVS L2, zero-trust mTLS.
-4. **Optimized infrastructure** — stateless WordPress on EKS, autoscaling, Aurora Global, Redis, CloudFront, IaC, GitOps, full observability triad.
+1. **Modularity over monolith** — `mercato-core` + 18 domain plugins + 9 integration adapters, behind a versioned SDK contract.
+2. **Microservices-augmented** — control plane + AI + search + notification services offload high-velocity workloads.
+3. **100% security compliance posture** — PCI-DSS SAQ-A, GDPR + CCPA with automated DSAR, SOC-2 Type II, OWASP ASVS L2, zero-trust mTLS.
+4. **Optimized infrastructure** — stateless WordPress on EKS, autoscaling, Aurora Global, Redis, CloudFront, IaC, GitOps, full observability.
 
 ## Implementation Readiness
 
-**Overall score: 91 / 100** — ready for engineering execution.
+**Overall score: 91 / 100** — ready for engineering execution. Open items in [Gap Matrix](docs_v2/deliverables/Gap_Matrix.md).
 
 ## License
 

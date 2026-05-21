@@ -2,7 +2,7 @@
 ## Business Requirements Document (Engineering-Grade, Implementation-Ready)
 
 > Document owner: CPO + Senior PMs + Compliance Lead + Finance Lead
-> Status: APPROVED FOR IMPLEMENTATION
+> Status: Implementation Baseline v2.0 — Approved for MVP planning; ADRs pending
 > Version: 2.0.0 (full rewrite of v1.0)
 > Cross-references: Vol 01 (Architecture), Vol 02 (PRD), Vol 04 (FSD), Vol 09 (Security), Vol 10 (QA/UAT)
 

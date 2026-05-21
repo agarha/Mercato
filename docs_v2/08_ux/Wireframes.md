@@ -2,7 +2,7 @@
 ## UX & Wireframes Specification (Engineering-Grade, Implementation-Ready)
 
 > Document owner: UX Architect + Lead Product Designer
-> Status: APPROVED FOR IMPLEMENTATION
+> Status: Implementation Baseline v2.0 — Approved for MVP planning; ADRs pending
 > Version: 2.0.0 (full rewrite of v1.0)
 > Cross-references: Vol 02 (PRD personas & lifecycles), Vol 04 (FSD per-domain), Vol 07 (OpenAPI for data shapes)
 

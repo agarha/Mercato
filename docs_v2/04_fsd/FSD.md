@@ -2,7 +2,7 @@
 ## Functional Specification Document (Engineering-Grade, Implementation-Ready)
 
 > Document owner: Principal Software Architect + Senior PMs + Tech Leads per domain
-> Status: APPROVED FOR IMPLEMENTATION
+> Status: Implementation Baseline v2.0 — Approved for MVP planning; ADRs pending
 > Version: 2.0.0 (full rewrite of v1.0)
 > Cross-references: Vol 01 (Architecture), Vol 02 (PRD), Vol 06 (Database), Vol 07 (OpenAPI), Vol 09 (Security)
 

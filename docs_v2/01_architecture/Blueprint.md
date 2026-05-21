@@ -2,7 +2,7 @@
 ## Architecture Blueprint (Engineering-Grade, Implementation-Ready)
 
 > Document owner: Principal Software Architect / Enterprise Solution Architect
-> Status: APPROVED FOR IMPLEMENTATION
+> Status: Implementation Baseline v2.0 — Approved for MVP planning; ADRs pending
 > Version: 2.0.0 (full rewrite of v1.0)
 > Cross-references: Vol 02 (PRD), Vol 04 (FSD), Vol 05 (SRS), Vol 06 (Database), Vol 07 (OpenAPI), Vol 09 (Security), Vol 11 (DevOps)
 

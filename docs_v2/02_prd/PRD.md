@@ -2,7 +2,7 @@
 ## Product Requirements Document (Engineering-Grade, Implementation-Ready)
 
 > Document owner: Chief Product Officer (with Senior PMs per domain)
-> Status: APPROVED FOR IMPLEMENTATION
+> Status: Implementation Baseline v2.0 — Approved for MVP planning; ADRs pending
 > Version: 2.0.0 (full rewrite of v1.0)
 > Cross-references: Vol 01 (Architecture), Vol 03 (BRD), Vol 04 (FSD), Vol 05 (SRS), Vol 08 (UX)
 
